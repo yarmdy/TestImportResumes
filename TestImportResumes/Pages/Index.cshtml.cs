@@ -15,7 +15,9 @@ namespace TestImportResumes.Pages
 
         public async Task<IActionResult> OnGet()
         {
-            var res = await _resumeImporterProvider.Imports(new Stream[] { new MemoryStream(), new MemoryStream(), new MemoryStream(), new MemoryStream(), new MemoryStream() },HttpContext.RequestAborted);
+            CancellationTokenSource tokenSource = CancellationTokenSource.CreateLinkedTokenSource(HttpContext.RequestAborted);
+            var res = await _resumeImporterProvider.Imports(new Stream[] { new MemoryStream(), new MemoryStream(), new MemoryStream(), new MemoryStream(), new MemoryStream() }, tokenSource.Token);
+
             return Page();
         }
     }

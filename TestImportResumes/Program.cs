@@ -133,19 +133,23 @@ public class DefaultResumeImporterProvider : IResumeImporterProvider
 
     public async Task<ImportResult> Import(Stream stream)
     {
-        CancellationTokenSource cancellationTokenSource = new CancellationTokenSource();
-        return (await Imports(new Stream[] { stream}, cancellationTokenSource.Token))[stream];
+        return (await Imports(new Stream[] { stream}, default))[stream];
     }
 
     public async Task<IDictionary<Stream, ImportResult>> Imports(IEnumerable<Stream> streams, CancellationToken cancellationToken)
     {
         ConcurrentDictionary<Stream, ImportResult> dic = new ConcurrentDictionary<Stream, ImportResult>();
-        await Parallel.ForEachAsync(streams,async (stream, cancellationToken) => {
+        await Parallel.ForEachAsync(streams,async (stream, _) => {
             Dictionary<string,Exception> exceptions = new Dictionary<string, Exception>();
             foreach (var importer in _importerDic)
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
+                    ImportResult cancel = ImportResult.Error("Cancel", new OperationCanceledException("ÒÑÈ¡Ïû"));
+                    dic.AddOrUpdate(stream, cancel, (stream, old) =>
+                    {
+                        return cancel;
+                    });
                     break;
                 }
                 var result = await importer.Value.Import(stream);
@@ -171,11 +175,12 @@ public class ZhilianResumeImporter : ResumeImporter
 
     public override Task<CanImportResult> CheckCanImport(Stream stream)
     {
-        throw new NotImplementedException();
+        return Task.FromResult(CanImportResult.Success());
     }
 
-    public override Task<ImportResult> DoImport(Stream stream)
+    public override async Task<ImportResult> DoImport(Stream stream)
     {
+        await Task.Delay(5000).ConfigureAwait(false);
         throw new NotImplementedException();
     }
 }
@@ -186,11 +191,12 @@ public class QianchengResumeImporter : ResumeImporter
 
     public override Task<CanImportResult> CheckCanImport(Stream stream)
     {
-        throw new NotImplementedException();
+        return Task.FromResult(CanImportResult.Success());
     }
 
-    public override Task<ImportResult> DoImport(Stream stream)
+    public override async Task<ImportResult> DoImport(Stream stream)
     {
+        await Task.Delay(5000).ConfigureAwait(false);
         throw new NotImplementedException();
     }
 }
