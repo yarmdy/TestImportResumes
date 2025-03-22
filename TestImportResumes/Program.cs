@@ -1,6 +1,10 @@
 using System.Collections.Concurrent;
 using System.Collections;
 using System.Collections.Immutable;
+using Microsoft.AspNetCore.ResponseCompression;
+using System.IO.Compression;
+using Microsoft.Extensions.Options;
+using ZstdSharp.Unsafe;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -9,6 +13,18 @@ builder.Services.AddRazorPages();
 builder.Services.AddScoped<IResumeImporterProvider,DefaultResumeImporterProvider>();
 builder.Services.AddScoped<IResumeImporter,ZhilianResumeImporter>();
 builder.Services.AddScoped<IResumeImporter,QianchengResumeImporter>();
+builder.Services.Configure<BrotliCompressionProviderOptions>(options =>
+{
+    options.Level = (CompressionLevel)4;
+});
+builder.Services.AddResponseCompression(options =>
+{
+    options.EnableForHttps = true;
+    options.Providers.Add<ZstdCompressionProvider>();
+    options.Providers.Add<BrotliCompressionProvider>();
+    options.Providers.Add<GzipCompressionProvider>();
+    options.Providers.Add<DeflateCompressionProvider>();
+});
 
 var app = builder.Build();
 
@@ -18,7 +34,7 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Error");
     // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
 }
-
+app.UseResponseCompression();
 app.UseStaticFiles();
 
 app.UseRouting();
@@ -29,6 +45,57 @@ app.MapRazorPages();
 
 app.Run();
 
+public class DeflateCompressionProviderOptions
+{
+    public CompressionLevel Level { get; set; } = CompressionLevel.Optimal;
+}
+public class DeflateCompressionProvider : ICompressionProvider
+{
+    public string EncodingName => "deflate";
+
+    public bool SupportsFlush => true;
+
+    public IOptionsMonitor<DeflateCompressionProviderOptions> Options { get; set; }
+
+    public DeflateCompressionProvider(IOptionsMonitor<DeflateCompressionProviderOptions> options)
+    {
+        Options = options;
+    }
+
+    public Stream CreateStream(Stream outputStream)
+    {
+        return new DeflateStream(outputStream, Options.CurrentValue.Level);
+    }
+}
+public class ZstdCompressionProviderOptions
+{
+    public CompressionLevel Level { get; set; } = CompressionLevel.Optimal;
+}
+public class ZstdCompressionProvider : ICompressionProvider
+{
+    public string EncodingName => "zstd";
+
+    public bool SupportsFlush => true;
+
+    public IOptionsMonitor<ZstdCompressionProviderOptions> Options { get; set; }
+
+    public ZstdCompressionProvider(IOptionsMonitor<ZstdCompressionProviderOptions> options)
+    {
+        Options = options;
+    }
+
+    public Stream CreateStream(Stream outputStream)
+    {
+        int level = Options.CurrentValue.Level switch {
+            CompressionLevel.Optimal =>Methods.ZSTD_defaultCLevel(),
+            CompressionLevel.Fastest=>1,
+            CompressionLevel.NoCompression =>Methods.ZSTD_minCLevel(),
+            CompressionLevel.SmallestSize =>Methods.ZSTD_maxCLevel(),
+            _ => (int)Options.CurrentValue.Level
+        };
+        return new ZstdSharp.CompressionStream(outputStream, level);
+    }
+}
 
 public class ImportResult
 {
@@ -180,7 +247,7 @@ public class ZhilianResumeImporter : ResumeImporter
 
     public override async Task<ImportResult> DoImport(Stream stream)
     {
-        await Task.Delay(5000).ConfigureAwait(false);
+        await Task.Delay(500).ConfigureAwait(false);
         throw new NotImplementedException();
     }
 }
@@ -196,7 +263,7 @@ public class QianchengResumeImporter : ResumeImporter
 
     public override async Task<ImportResult> DoImport(Stream stream)
     {
-        await Task.Delay(5000).ConfigureAwait(false);
+        await Task.Delay(500).ConfigureAwait(false);
         throw new NotImplementedException();
     }
 }
