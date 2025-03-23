@@ -4,7 +4,9 @@ using System.Collections.Immutable;
 using Microsoft.AspNetCore.ResponseCompression;
 using System.IO.Compression;
 using Microsoft.Extensions.Options;
-using ZstdSharp.Unsafe;
+using Microsoft.AspNetCore.Mvc;
+using ZstdSharp;
+using System.Xml;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -42,6 +44,13 @@ app.UseRouting();
 app.UseAuthorization();
 
 app.MapRazorPages();
+app.Map("Import", async(HttpRequest request,IResumeImporterProvider provider) => {
+    var file = (await request.ReadFormAsync()).Files[0]!;
+    var stream = new MemoryStream();
+    await file.OpenReadStream().CopyToAsync(stream);
+    var result = await provider.Import(stream);
+    return await Task.FromResult(Results.Json(new { ok=true,msg="成功"}));
+});
 
 app.Run();
 
@@ -87,10 +96,10 @@ public class ZstdCompressionProvider : ICompressionProvider
     public Stream CreateStream(Stream outputStream)
     {
         int level = Options.CurrentValue.Level switch {
-            CompressionLevel.Optimal =>Methods.ZSTD_defaultCLevel(),
+            CompressionLevel.Optimal =>Compressor.DefaultCompressionLevel,
             CompressionLevel.Fastest=>1,
-            CompressionLevel.NoCompression =>Methods.ZSTD_minCLevel(),
-            CompressionLevel.SmallestSize =>Methods.ZSTD_maxCLevel(),
+            CompressionLevel.NoCompression => Compressor.MinCompressionLevel,
+            CompressionLevel.SmallestSize => Compressor.MaxCompressionLevel,
             _ => (int)Options.CurrentValue.Level
         };
         return new ZstdSharp.CompressionStream(outputStream, level);
@@ -242,6 +251,15 @@ public class ZhilianResumeImporter : ResumeImporter
 
     public override Task<CanImportResult> CheckCanImport(Stream stream)
     {
+        try
+        {
+            XmlDocument xml = new XmlDocument();
+            xml.Load(stream);
+        }
+        catch  {
+            return Task.FromResult(CanImportResult.Error(new NotSupportedException("不支持的文件")));
+        }
+        
         return Task.FromResult(CanImportResult.Success());
     }
 
