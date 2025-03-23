@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Mvc;
 using ZstdSharp;
 using System.Xml;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -254,8 +255,7 @@ public class ZhilianResumeImporter : ResumeImporter
     {
         try
         {
-            XmlDocument xml = new XmlDocument();
-            xml.Load(stream);
+            long pos = readToString(stream, "<div class=Section1");
         }
         catch  {
             return Task.FromResult(CanImportResult.Error(new NotSupportedException("不支持的文件")));
@@ -268,6 +268,50 @@ public class ZhilianResumeImporter : ResumeImporter
     {
         await Task.Delay(500).ConfigureAwait(false);
         throw new NotImplementedException();
+    }
+    private unsafe long readToString(Stream stream,string str) {
+        byte[] data = Encoding.UTF8.GetBytes(str);
+        fixed (byte * strb = data)
+        {
+            byte* cache = stackalloc byte[data.Length];
+            int pos = 0;
+            long oldPos = stream.Position;
+            stream.Seek(0, SeekOrigin.End);
+            long streamLen = stream.Position + 1;
+            stream.Position = oldPos;
+            bool isEnd = false;
+            while (stream.Position < streamLen && !isEnd)
+            {
+                if (stream.Position == streamLen - 1)
+                {
+                    isEnd = true;
+                }
+                byte b = (byte)stream.ReadByte();
+                cache[pos++] = b;
+                if (!isSame(cache, strb, pos))
+                {
+                    pos = 0;
+                    continue;
+                }
+                if (pos == data.Length)
+                {
+                    stream.Position -= data.Length;
+                    return stream.Position;
+                }
+            }
+            return -1;
+        }
+        bool isSame(byte* data1,byte* data2,long len)
+        {
+            while (len-- > 0)
+            {
+                if (data1[len] != data2[len])
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
     }
 }
 
