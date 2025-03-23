@@ -46,8 +46,9 @@ app.UseAuthorization();
 app.MapRazorPages();
 app.Map("Import", async(HttpRequest request,IResumeImporterProvider provider) => {
     var file = (await request.ReadFormAsync()).Files[0]!;
-    var stream = new MemoryStream();
-    await file.OpenReadStream().CopyToAsync(stream);
+    //var stream = new MemoryStream();
+    //await file.OpenReadStream().CopyToAsync(stream);
+    var stream = file.OpenReadStream();
     var result = await provider.Import(stream);
     return await Task.FromResult(Results.Json(new { ok=true,msg="³É¹¦"}));
 });
