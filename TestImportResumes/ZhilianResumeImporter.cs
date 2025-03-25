@@ -1,15 +1,10 @@
-﻿using Microsoft.Extensions.FileSystemGlobbing;
-using System;
+﻿using System;
 using System.Collections.Concurrent;
-using System.IO;
-using System.IO.Compression;
-using System.Linq;
-using System.Numerics;
+using System.Linq.Expressions;
+using System.Reflection;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Web;
-using static System.Net.Mime.MediaTypeNames;
 
 public class ZhilianResumeImporter : ResumeImporter
 {
@@ -99,8 +94,10 @@ public class ZhilianResumeImporter : ResumeImporter
                     stream.Position = end;
                 }
             }
-            
-            return Task.FromResult(ImportResult.Success(ResumeSource, _myConverter.Convert<ZZ_XQ_Resumes_Entity>(resultDic)));
+            resultDic["ExpectedSalary"] = MapGZReg.Match(resultDic["ExpectedSalary"] + "")?.Groups[1].Value;
+            resultDic["Exp"] = (resultDic["Exp"] + "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)[0];
+            ZZ_XQ_Resumes_Entity obj = _myConverter.Convert<ZZ_XQ_Resumes_Entity>(resultDic);
+            return Task.FromResult(ImportResult.Success(ResumeSource, obj));
         }catch(ZhilianFileReadFail zlex)
         {
             return Task.FromResult(ImportResult.Error(ResumeSource, zlex));
@@ -129,7 +126,7 @@ public class ZhilianResumeImporter : ResumeImporter
         readToStringRequire(stream, "<span style='font-size:");
         readToStringRequire(stream, ">");
         readToStringRequire(stream, "<");
-        string WorkType = getLastString(stream)!.Trim();
+        string JobDescription = getLastString(stream)!.Trim();
         stream.Position = start;
         readToStringRequire(stream, "期望从事职业：");
         readToStringRequire(stream, "<span style='font-size:");
@@ -146,6 +143,7 @@ public class ZhilianResumeImporter : ResumeImporter
         dic["ExpectedSalary"] = ExpectedSalary;
         dic["Goal"] = Goal;
         dic["Industry"] = Industry;
+        dic["JobDescription"] = JobDescription;
     }
     private void Pingjia(Stream stream, Dictionary<string,object?> dic, long end)
     {
@@ -279,7 +277,7 @@ public class ZhilianResumeImporter : ResumeImporter
         string Mobile = getLastString(stream)!;
         readToStringRequire(stream, "<a href=\"mailto:");
         readToStringRequire(stream, "\">");
-        string Email = getLastString(stream)!;
+        string EMail = getLastString(stream)!;
         readToStringRequire(stream, "</table>");
         dic["FullName"] = FullName;
         dic["Sex"] = Sex;
@@ -288,7 +286,7 @@ public class ZhilianResumeImporter : ResumeImporter
         dic["Edu"] = Edu;
         dic["Photo"] = Photo;
         dic["Mobile"] = Mobile;
-        dic["Email"] = Email;
+        dic["EMail"] = EMail;
 
     }
     private long readToStringRequire(Stream stream, string str, long endPos = -1, bool posToSearchEnd = true)
@@ -312,6 +310,7 @@ public class ZhilianResumeImporter : ResumeImporter
     private static readonly Regex MapTableOnlyReg = new Regex(@"\<table class=MsoTableGrid.*?\</table\>", RegexOptions.Singleline | RegexOptions.Compiled);
     private static readonly Regex MapSpanReg = new Regex(@"\<span style='font-size:.*?>(.*?)\</span\>", RegexOptions.Singleline | RegexOptions.Compiled);
     private static readonly Regex MapHtmlReg = new Regex(@"\<[^\<\>]+?\>", RegexOptions.Singleline | RegexOptions.Compiled);
+    private static readonly Regex MapGZReg = new Regex(@"\d+?\s*-\s*(\d+).*$", RegexOptions.Singleline | RegexOptions.Compiled);
 
     private static readonly string[] checkAnchors = new string[] {
         "<body lang=",
@@ -425,19 +424,128 @@ public class ZhilianResumeImporter : ResumeImporter
 
 public interface IDicToObjConverter
 {
-    T Convert<T>(IDictionary<string, object?> dic) where T:class;
+    T Convert<T>(IDictionary<string, object?> dic) where T : class, new();
 }
 
 public class DynamicDicToObjConverter : IDicToObjConverter
 {
     private ConcurrentDictionary<Type, Func<IDictionary<string, object?>, object>> _cacheFunc = new ConcurrentDictionary<Type, Func<IDictionary<string, object?>, object>>();
-    
-    public T Convert<T>(IDictionary<string, object?> dic) where T : class
+
+    public T Convert<T>(IDictionary<string, object?> dic) where T : class, new()
     {
-        throw new NotImplementedException();
+        return (T)Convert(typeof(T), dic);
+    }
+
+    private static readonly MethodInfo ContainsKey = typeof(IDictionary<string, object?>).GetMethod("ContainsKey", BindingFlags.Public | BindingFlags.Instance)!;
+    private static readonly PropertyInfo Item = typeof(IDictionary<string, object?>).GetProperty("Item", BindingFlags.Public | BindingFlags.Instance)!;
+    private static bool isSameType(Type type1, object obj2)
+    {
+        Type type2 = obj2.GetType();
+        if (type1.IsAssignableFrom(type2))
+        {
+            return true;
+        }
+        type1 = Nullable.GetUnderlyingType(type1) ?? type1;
+        type2 = Nullable.GetUnderlyingType(type2) ?? type2;
+        if (type1.IsAssignableFrom(type2))
+        {
+            return true;
+        }
+        return false;
+    }
+    private static bool canConvert(Type type1, object obj2)
+    {
+        Type type2 = obj2.GetType();
+        type1 = Nullable.GetUnderlyingType(type1) ?? type1;
+        type2 = Nullable.GetUnderlyingType(type2) ?? type2;
+        
+        return true;
+    }
+    private static object? convertTo(object obj2, Type type)
+    {
+        try
+        {
+            return System.Convert.ChangeType(obj2, type);
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine(ex.Message);
+        }
+        return null;
+    }
+    public object Convert(Type type, IDictionary<string, object?> dic)
+    {
+        return _cacheFunc.GetOrAdd(type, type =>
+        {
+            ParameterExpression paramDic = Expression.Parameter(typeof(IDictionary<string, object?>), nameof(dic));
+            LabelTarget returnLabel = Expression.Label(type, "return");
+            ParameterExpression localResult = Expression.Parameter(type, "result");
+
+            ConstructorInfo? constructor = type.GetConstructor(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly, Array.Empty<Type>());
+            if (constructor == null)
+            {
+                throw new ArgumentException("没有公共无参的构造");
+            }
+            List<Expression> expressions = new List<Expression>()
+            {
+                Expression.Assign(localResult, Expression.New(constructor)),
+            };
+
+            //System.Convert.GetTypeCode()
+            foreach (PropertyInfo prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(a => a.GetMethod != null & a.GetCustomAttribute<IgnoreConvertAttribute>(true) == null))
+            {
+                ParameterExpression obj = Expression.Parameter(typeof(object), "obj");
+                Expression propName = Expression.Constant(prop.Name);
+                Expression propType = Expression.Constant(prop.PropertyType);
+                Type real = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
+                Expression realType = Expression.Constant(real);
+                Expression dicIndex = Expression.MakeIndex(paramDic, Item, new Expression[] { propName });
+
+                Expression ifthen = Expression.IfThen(
+                        Expression.AndAlso(
+                            Expression.Call(paramDic, ContainsKey, propName),
+                            Expression.NotEqual(Expression.Constant(null), dicIndex)
+                            ),
+                        Expression.IfThenElse(
+                            Expression.Call(null, ((Delegate)isSameType).Method, new Expression[] { propType, dicIndex }),
+                            Expression.Assign(
+                                Expression.Property(localResult, prop),
+                                Expression.Convert(dicIndex, prop.PropertyType)),
+                            Expression.IfThen(
+                                Expression.Call(null, ((Delegate)canConvert).Method, propType, dicIndex),
+                                Expression.Block(
+                                    new ParameterExpression[] { obj },
+                                    Expression.Assign(obj, Expression.Call(null, ((Delegate)convertTo).Method, dicIndex, realType)),
+                                    Expression.IfThen(
+                                        Expression.NotEqual(obj, Expression.Constant(null)),
+                                        Expression.Assign(
+                                            Expression.Property(localResult, prop),
+                                            Expression.Convert(obj, prop.PropertyType)
+                                            )
+                                        )
+                                    )
+                            )
+                        )
+                    );
+                expressions.Add(ifthen);
+            }
+
+
+
+            expressions.Add(Expression.Return(returnLabel, localResult));
+            expressions.Add(Expression.Label(returnLabel, localResult));
+
+            Expression block = Expression.Block(
+                new ParameterExpression[] {
+                    localResult
+                },
+                expressions
+                );
+            return Expression.Lambda<Func<IDictionary<string, object?>, object>>(block, paramDic).Compile();
+        }).Invoke(dic);
     }
 }
-
+public class IgnoreConvertAttribute : Attribute{ }
 public class ZZ_XQ_Resumes_Entity
 {
     public string? Photo { get; set; }
