@@ -96,6 +96,9 @@ public class ZhilianResumeImporter : ResumeImporter
             }
             resultDic["ExpectedSalary"] = MapGZReg.Match(resultDic["ExpectedSalary"] + "")?.Groups[1].Value;
             resultDic["Exp"] = (resultDic["Exp"] + "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)[0];
+            resultDic["Birth"] = MapBirthReg.Match(resultDic["Birth"] + "")?.Groups[1].Value;
+            
+
             ZZ_XQ_Resumes_Entity obj = _myConverter.Convert<ZZ_XQ_Resumes_Entity>(resultDic);
             return Task.FromResult(ImportResult.Success(ResumeSource, obj));
         }catch(ZhilianFileReadFail zlex)
@@ -311,6 +314,7 @@ public class ZhilianResumeImporter : ResumeImporter
     private static readonly Regex MapSpanReg = new Regex(@"\<span style='font-size:.*?>(.*?)\</span\>", RegexOptions.Singleline | RegexOptions.Compiled);
     private static readonly Regex MapHtmlReg = new Regex(@"\<[^\<\>]+?\>", RegexOptions.Singleline | RegexOptions.Compiled);
     private static readonly Regex MapGZReg = new Regex(@"\d+?\s*-\s*(\d+).*$", RegexOptions.Singleline | RegexOptions.Compiled);
+    private static readonly Regex MapBirthReg = new Regex(@"\((.+?)\)", RegexOptions.Singleline | RegexOptions.Compiled);
 
     private static readonly string[] checkAnchors = new string[] {
         "<body lang=",
