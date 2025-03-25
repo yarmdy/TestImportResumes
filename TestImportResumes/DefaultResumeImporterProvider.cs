@@ -1,12 +1,15 @@
 ﻿using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 
 public class DefaultResumeImporterProvider : IResumeImporterProvider
 {
-    private readonly ImmutableDictionary<string, IResumeImporter> _importerDic = default!;
+    private readonly ReadOnlyDictionary<string, IResumeImporter> _importerDic = default!;
+    private readonly IEnumerable<IResumeImporter> _importers;
     public DefaultResumeImporterProvider(IEnumerable<IResumeImporter> importers)
     {
-        _importerDic = importers.ToImmutableDictionary(a=>a.ResumeSource,StringComparer.OrdinalIgnoreCase);
+        _importers = importers;
+        _importerDic = new ReadOnlyDictionary<string, IResumeImporter>(importers.ToDictionary(a => a.ResumeSource, StringComparer.OrdinalIgnoreCase)) ;
     }
 
     public IResumeImporter? GetResumeImporter(string resumeSource)
@@ -24,7 +27,7 @@ public class DefaultResumeImporterProvider : IResumeImporterProvider
         ConcurrentDictionary<Stream, ImportResult> dic = new ConcurrentDictionary<Stream, ImportResult>();
         await Parallel.ForEachAsync(streams,async (stream, _) => {
             Dictionary<string,Exception> exceptions = new Dictionary<string, Exception>();
-            foreach (var importer in _importerDic)
+            foreach (var importer in _importers)
             {
                 if (cancellationToken.IsCancellationRequested)
                 {
@@ -35,13 +38,13 @@ public class DefaultResumeImporterProvider : IResumeImporterProvider
                     });
                     break;
                 }
-                var result = await importer.Value.Import(stream);
+                var result = await importer.Import(stream);
                 if (result.Result != null)
                 {
                     dic.TryAdd(stream, result);
                     break;
                 }
-                exceptions[importer.Key] = result.Exception!;
+                exceptions[importer.ResumeSource] = result.Exception!;
             }
             if (!dic.ContainsKey(stream))
             {

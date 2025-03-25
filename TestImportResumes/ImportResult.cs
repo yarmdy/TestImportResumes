@@ -1,6 +1,6 @@
 ﻿public class ImportResult
 {
-    public static ImportResult Success(string source, IDictionary<string, string> result)
+    public static ImportResult Success(string source, ZZ_XQ_Resumes_Entity result)
     {
         ImportResult tresult = new ImportResult(source) { Result = result };
         return tresult;
@@ -15,6 +15,8 @@
         Source = source;
     }
     public string Source { get; }
-    public IDictionary<string, string>? Result { get; init; }
+    public ZZ_XQ_Resumes_Entity? Result { get; init; }
     public Exception? Exception { get; init; }
 }
+
+

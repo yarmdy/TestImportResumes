@@ -13,6 +13,7 @@ builder.Services.AddRazorPages();
 builder.Services.AddScoped<IResumeImporterProvider,DefaultResumeImporterProvider>();
 builder.Services.AddScoped<IResumeImporter,ZhilianResumeImporter>();
 builder.Services.AddScoped<IResumeImporter,QianchengResumeImporter>();
+builder.Services.AddScoped<IDicToObjConverter, DynamicDicToObjConverter>();
 builder.Services.Configure<BrotliCompressionProviderOptions>(options =>
 {
     options.Level = (CompressionLevel)4;

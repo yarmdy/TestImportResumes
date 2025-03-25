@@ -11,7 +11,7 @@ namespace TestImportResumes.Pages
             _logger = logger;
         }
 
-        public async Task<IActionResult> OnGet()
+        public IActionResult OnGet()
         {
             return Page();
         }
