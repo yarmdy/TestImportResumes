@@ -1,4 +1,5 @@
-﻿using System;
+﻿using LegendaryConverters;
+using System;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
@@ -96,9 +97,9 @@ public class ZhilianResumeImporter : ResumeImporter
                     stream.Position = end;
                 }
             }
-            resultDic["ExpectedSalary"] = (MapGZReg.Match(resultDic["ExpectedSalary"] + "")?.Groups[1].Value as IConvertible)!.ToInt32(null);
-            resultDic["Exp"] = ((resultDic["Exp"] + "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)[0] as IConvertible)!.ToInt32(null);
-            resultDic["Birth"] = (MapBirthReg.Match(resultDic["Birth"] + "")?.Groups[1].Value as IConvertible)!.ToDateTime(null);
+            resultDic["ExpectedSalary"] = MapGZReg.Match(resultDic["ExpectedSalary"] + "")?.Groups[1].Value;
+            resultDic["Exp"] = (resultDic["Exp"] + "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)[0];
+            resultDic["Birth"] = MapBirthReg.Match(resultDic["Birth"] + "")?.Groups[1].Value;
             ZZ_XQ_Resumes_Entity obj = _myConverter.Convert<ZZ_XQ_Resumes_Entity>(resultDic);
 
             //Stopwatch sw = new Stopwatch();

@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using Microsoft.AspNetCore.Mvc;
 using ZstdSharp;
 using System.Xml;
+using LegendaryConverters;
 
 var builder = WebApplication.CreateBuilder(args);
 
