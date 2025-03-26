@@ -103,11 +103,11 @@ public class ZhilianResumeImporter : ResumeImporter
 
             Stopwatch sw = new Stopwatch();
             sw.Start();
-            for(int i = 0; i < 100000; i++)
+            for(int i = 0; i < 1000000; i++)
             {
                 ZZ_XQ_Resumes_Entity obj2 = _myConverter.Convert<ZZ_XQ_Resumes_Entity>(resultDic);
             }
-            _logger.LogWarning($"转换100000次，用时{sw.ElapsedMilliseconds}ms");
+            _logger.LogWarning($"转换1000000次，用时{sw.ElapsedMilliseconds}ms");
 
             return Task.FromResult(ImportResult.Success(ResumeSource, obj));
         }catch(ZhilianFileReadFail zlex)

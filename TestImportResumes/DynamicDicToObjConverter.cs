@@ -127,8 +127,12 @@ public class DynamicDicToObjConverter : IDicToObjConverter
         object obj = Activator.CreateInstance(type)!;
         foreach (PropertyInfo prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(a => a.SetMethod != null & a.GetCustomAttribute<IgnoreConvertAttribute>(true) == null))
         {
+            if (!dic.ContainsKey(prop.Name)) {
+                continue;
+            }
             object? dicObj = dic[prop.Name];
-            if (!dic.ContainsKey(prop.Name) || dicObj == null) {
+            if (dicObj == null)
+            {
                 continue;
             }
             if (isSameType(prop.PropertyType, dicObj))
