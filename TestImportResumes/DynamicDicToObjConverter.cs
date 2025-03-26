@@ -10,6 +10,7 @@ public class DynamicDicToObjConverter : IDicToObjConverter
 
     private static readonly MethodInfo ContainsKey = typeof(IDictionary<string, object?>).GetMethod("ContainsKey", BindingFlags.Public | BindingFlags.Instance)!;
     private static readonly PropertyInfo Item = typeof(IDictionary<string, object?>).GetProperty("Item", BindingFlags.Public | BindingFlags.Instance)!;
+    private static MethodInfo isSameTypeMethod = typeof(DynamicDicToObjConverter).GetMethod(nameof(isSameType),BindingFlags.NonPublic|BindingFlags.Static)!;
     private static bool isSameType(Type type1, object obj2)
     {
         Type type2 = obj2.GetType();
@@ -25,7 +26,7 @@ public class DynamicDicToObjConverter : IDicToObjConverter
         }
         return false;
     }
-    
+    private static MethodInfo convertToMethod = typeof(DynamicDicToObjConverter).GetMethod(nameof(convertTo), BindingFlags.NonPublic | BindingFlags.Static)!;
     private static object? convertTo(object obj2, Type type)
     {
         try
@@ -73,7 +74,7 @@ public class DynamicDicToObjConverter : IDicToObjConverter
                         Expression.TypeIs(dicIndex,typeof(IConvertible)),
                         Expression.Block(
                             new ParameterExpression[] { obj },
-                            Expression.Assign(obj, Expression.Call(null, ((Delegate)convertTo).Method, dicIndex, realType)),
+                            Expression.Assign(obj, Expression.Call(null, convertToMethod, dicIndex, realType)),
                             Expression.IfThen(
                                 Expression.NotEqual(obj, Expression.Constant(null)),
                                 Expression.Assign(
@@ -90,7 +91,7 @@ public class DynamicDicToObjConverter : IDicToObjConverter
                             Expression.NotEqual(Expression.Constant(null), dicIndex)
                             ),
                         Expression.IfThenElse(
-                            Expression.Call(null, ((Delegate)isSameType).Method, new Expression[] { propType, dicIndex }),
+                            Expression.Call(null, isSameTypeMethod, new Expression[] { propType, dicIndex }),
                             Expression.Assign(
                                 Expression.Property(localResult, prop),
                                 Expression.Convert(dicIndex, prop.PropertyType)),
