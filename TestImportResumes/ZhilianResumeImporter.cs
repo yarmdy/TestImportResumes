@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
-using System.Linq.Expressions;
-using System.Reflection;
+using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
@@ -9,14 +8,17 @@ using System.Text.RegularExpressions;
 public class ZhilianResumeImporter : ResumeImporter
 {
     private IDicToObjConverter _myConverter;
-    public ZhilianResumeImporter(IDicToObjConverter myConverter)
+    private ILogger<ZhilianResumeImporter> _logger;
+    public ZhilianResumeImporter(IDicToObjConverter myConverter,ILogger<ZhilianResumeImporter> logger)
     {
         _myConverter = myConverter;
+        _logger = logger;
     }
     public override string ResumeSource => "Zhilian";
 
     public override Task<CanImportResult> CheckCanImport(Stream stream)
     {
+        
         bool ret = findAllStrings(stream, checkAnchors);
         if (!ret)
         {
@@ -97,9 +99,16 @@ public class ZhilianResumeImporter : ResumeImporter
             resultDic["ExpectedSalary"] = MapGZReg.Match(resultDic["ExpectedSalary"] + "")?.Groups[1].Value;
             resultDic["Exp"] = (resultDic["Exp"] + "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)[0];
             resultDic["Birth"] = MapBirthReg.Match(resultDic["Birth"] + "")?.Groups[1].Value;
-            
-
             ZZ_XQ_Resumes_Entity obj = _myConverter.Convert<ZZ_XQ_Resumes_Entity>(resultDic);
+
+            Stopwatch sw = new Stopwatch();
+            sw.Start();
+            for(int i = 0; i < 100000; i++)
+            {
+                ZZ_XQ_Resumes_Entity obj2 = _myConverter.Convert<ZZ_XQ_Resumes_Entity>(resultDic);
+            }
+            _logger.LogWarning($"转换100000次，用时{sw.ElapsedMilliseconds}ms");
+
             return Task.FromResult(ImportResult.Success(ResumeSource, obj));
         }catch(ZhilianFileReadFail zlex)
         {
@@ -424,168 +433,4 @@ public class ZhilianResumeImporter : ResumeImporter
             return _encoding;
         });
     }
-}
-
-public interface IDicToObjConverter
-{
-    T Convert<T>(IDictionary<string, object?> dic) where T : class, new();
-}
-
-public class DynamicDicToObjConverter : IDicToObjConverter
-{
-    private ConcurrentDictionary<Type, Func<IDictionary<string, object?>, object>> _cacheFunc = new ConcurrentDictionary<Type, Func<IDictionary<string, object?>, object>>();
-
-    public T Convert<T>(IDictionary<string, object?> dic) where T : class, new()
-    {
-        return (T)Convert(typeof(T), dic);
-    }
-
-    private static readonly MethodInfo ContainsKey = typeof(IDictionary<string, object?>).GetMethod("ContainsKey", BindingFlags.Public | BindingFlags.Instance)!;
-    private static readonly PropertyInfo Item = typeof(IDictionary<string, object?>).GetProperty("Item", BindingFlags.Public | BindingFlags.Instance)!;
-    private static bool isSameType(Type type1, object obj2)
-    {
-        Type type2 = obj2.GetType();
-        if (type1.IsAssignableFrom(type2))
-        {
-            return true;
-        }
-        type1 = Nullable.GetUnderlyingType(type1) ?? type1;
-        type2 = Nullable.GetUnderlyingType(type2) ?? type2;
-        if (type1.IsAssignableFrom(type2))
-        {
-            return true;
-        }
-        return false;
-    }
-    private static bool canConvert(Type type1, object obj2)
-    {
-        Type type2 = obj2.GetType();
-        type1 = Nullable.GetUnderlyingType(type1) ?? type1;
-        type2 = Nullable.GetUnderlyingType(type2) ?? type2;
-        
-        return true;
-    }
-    private static object? convertTo(object obj2, Type type)
-    {
-        try
-        {
-            return System.Convert.ChangeType(obj2, type);
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine(ex.Message);
-        }
-        return null;
-    }
-    public object Convert(Type type, IDictionary<string, object?> dic)
-    {
-        return _cacheFunc.GetOrAdd(type, type =>
-        {
-            ParameterExpression paramDic = Expression.Parameter(typeof(IDictionary<string, object?>), nameof(dic));
-            LabelTarget returnLabel = Expression.Label(type, "return");
-            ParameterExpression localResult = Expression.Parameter(type, "result");
-
-            ConstructorInfo? constructor = type.GetConstructor(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly, Array.Empty<Type>());
-            if (constructor == null)
-            {
-                throw new ArgumentException("没有公共无参的构造");
-            }
-            List<Expression> expressions = new List<Expression>()
-            {
-                Expression.Assign(localResult, Expression.New(constructor)),
-            };
-
-            //System.Convert.GetTypeCode()
-            foreach (PropertyInfo prop in type.GetProperties(BindingFlags.Public | BindingFlags.Instance).Where(a => a.GetMethod != null & a.GetCustomAttribute<IgnoreConvertAttribute>(true) == null))
-            {
-                ParameterExpression obj = Expression.Parameter(typeof(object), "obj");
-                Expression propName = Expression.Constant(prop.Name);
-                Expression propType = Expression.Constant(prop.PropertyType);
-                Type real = Nullable.GetUnderlyingType(prop.PropertyType) ?? prop.PropertyType;
-                Expression realType = Expression.Constant(real);
-                Expression dicIndex = Expression.MakeIndex(paramDic, Item, new Expression[] { propName });
-
-                Expression ifthen = Expression.IfThen(
-                        Expression.AndAlso(
-                            Expression.Call(paramDic, ContainsKey, propName),
-                            Expression.NotEqual(Expression.Constant(null), dicIndex)
-                            ),
-                        Expression.IfThenElse(
-                            Expression.Call(null, ((Delegate)isSameType).Method, new Expression[] { propType, dicIndex }),
-                            Expression.Assign(
-                                Expression.Property(localResult, prop),
-                                Expression.Convert(dicIndex, prop.PropertyType)),
-                            Expression.IfThen(
-                                Expression.Call(null, ((Delegate)canConvert).Method, propType, dicIndex),
-                                Expression.Block(
-                                    new ParameterExpression[] { obj },
-                                    Expression.Assign(obj, Expression.Call(null, ((Delegate)convertTo).Method, dicIndex, realType)),
-                                    Expression.IfThen(
-                                        Expression.NotEqual(obj, Expression.Constant(null)),
-                                        Expression.Assign(
-                                            Expression.Property(localResult, prop),
-                                            Expression.Convert(obj, prop.PropertyType)
-                                            )
-                                        )
-                                    )
-                            )
-                        )
-                    );
-                expressions.Add(ifthen);
-            }
-
-
-
-            expressions.Add(Expression.Return(returnLabel, localResult));
-            expressions.Add(Expression.Label(returnLabel, localResult));
-
-            Expression block = Expression.Block(
-                new ParameterExpression[] {
-                    localResult
-                },
-                expressions
-                );
-            return Expression.Lambda<Func<IDictionary<string, object?>, object>>(block, paramDic).Compile();
-        }).Invoke(dic);
-    }
-}
-public class IgnoreConvertAttribute : Attribute{ }
-public class ZZ_XQ_Resumes_Entity
-{
-    public string? Photo { get; set; }
-    public int ZZ_XQ_ResumesID { get; set; }
-    public string? ResumeName { get; set; }
-    public int ZZ_XQ_StudentsID { get; set; }
-    public string? FullName { get; set; }
-    public string? Sex { get; set; }
-    public string? EMail { get; set; }
-    public string? Mobile { get; set; }
-    public string? Address { get; set; }
-    public int? ZZ_XQ_ClassesID { get; set; }
-    public int? ZZ_XQ_OrganizationsID { get; set; }
-    public int? ZZ_XQ_TeachersID { get; set; }
-    public DateTime? Date { get; set; }
-    public string? TalentSkills { get; set; }
-    public string? Achievements { get; set; }
-    public string? RecommendedPosition { get; set; }
-    public string? RecommendedRemarks { get; set; }
-    public int? RecommendedZZ_XQ_OrganizationsID { get; set; }
-    public string? Skills { get; set; }
-    public string? Certificates { get; set; }
-    public string? Projects { get; set; }
-    public string? WorkExperience { get; set; }
-    public string? Education { get; set; }
-    public string? Industry { get; set; }
-    public string? PreferredLocation { get; set; }
-    public int? ExpectedSalary { get; set; }
-    public string? JobDescription { get; set; }
-    public string? Goal { get; set; }
-    public string? Plan { get; set; }
-    public DateTime? Birth { get; set; }
-    public int? Exp { get; set; }
-    public string? Edu { get; set; }
-    public DateTime TimeUpdated { get; set; }
-    public string? UpdatedBy { get; set; }
-    public DateTime TimeCreated { get; set; }
-    public string? CreatedBy { get; set; }
 }

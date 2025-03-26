@@ -1,0 +1,40 @@
+﻿public class ZZ_XQ_Resumes_Entity
+{
+    public object? Obj { get; set; }
+    public string? Photo { get; set; }
+    public int ZZ_XQ_ResumesID { get; set; }
+    public string? ResumeName { get; set; }
+    public int ZZ_XQ_StudentsID { get; set; }
+    public string? FullName { get; set; }
+    public string? Sex { get; set; }
+    public string? EMail { get; set; }
+    public string? Mobile { get; set; }
+    public string? Address { get; set; }
+    public int? ZZ_XQ_ClassesID { get; set; }
+    public int? ZZ_XQ_OrganizationsID { get; set; }
+    public int? ZZ_XQ_TeachersID { get; set; }
+    public DateTime? Date { get; set; }
+    public string? TalentSkills { get; set; }
+    public string? Achievements { get; set; }
+    public string? RecommendedPosition { get; set; }
+    public string? RecommendedRemarks { get; set; }
+    public int? RecommendedZZ_XQ_OrganizationsID { get; set; }
+    public string? Skills { get; set; }
+    public string? Certificates { get; set; }
+    public string? Projects { get; set; }
+    public string? WorkExperience { get; set; }
+    public string? Education { get; set; }
+    public string? Industry { get; set; }
+    public string? PreferredLocation { get; set; }
+    public int? ExpectedSalary { get; set; }
+    public string? JobDescription { get; set; }
+    public string? Goal { get; set; }
+    public string? Plan { get; set; }
+    public DateTime? Birth { get; set; }
+    public int? Exp { get; set; }
+    public string? Edu { get; set; }
+    public DateTime TimeUpdated { get; set; }
+    public string? UpdatedBy { get; set; }
+    public DateTime TimeCreated { get; set; }
+    public string? CreatedBy { get; set; }
+}
