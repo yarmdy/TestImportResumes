@@ -96,18 +96,18 @@ public class ZhilianResumeImporter : ResumeImporter
                     stream.Position = end;
                 }
             }
-            resultDic["ExpectedSalary"] = MapGZReg.Match(resultDic["ExpectedSalary"] + "")?.Groups[1].Value;
-            resultDic["Exp"] = (resultDic["Exp"] + "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)[0];
-            resultDic["Birth"] = MapBirthReg.Match(resultDic["Birth"] + "")?.Groups[1].Value;
+            resultDic["ExpectedSalary"] = (MapGZReg.Match(resultDic["ExpectedSalary"] + "")?.Groups[1].Value as IConvertible)!.ToInt32(null);
+            resultDic["Exp"] = ((resultDic["Exp"] + "").Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)[0] as IConvertible)!.ToInt32(null);
+            resultDic["Birth"] = (MapBirthReg.Match(resultDic["Birth"] + "")?.Groups[1].Value as IConvertible)!.ToDateTime(null);
             ZZ_XQ_Resumes_Entity obj = _myConverter.Convert<ZZ_XQ_Resumes_Entity>(resultDic);
 
-            Stopwatch sw = new Stopwatch();
-            sw.Start();
-            for(int i = 0; i < 1000000; i++)
-            {
-                ZZ_XQ_Resumes_Entity obj2 = _myConverter.Convert<ZZ_XQ_Resumes_Entity>(resultDic);
-            }
-            _logger.LogWarning($"转换1000000次，用时{sw.ElapsedMilliseconds}ms");
+            //Stopwatch sw = new Stopwatch();
+            //sw.Start();
+            //for(int i = 0; i < 1000000; i++)
+            //{
+            //    ZZ_XQ_Resumes_Entity obj2 = _myConverter.Convert<ZZ_XQ_Resumes_Entity>(resultDic);
+            //}
+            //_logger.LogWarning($"转换1000000次，用时{sw.ElapsedMilliseconds}ms");
 
             return Task.FromResult(ImportResult.Success(ResumeSource, obj));
         }catch(ZhilianFileReadFail zlex)
